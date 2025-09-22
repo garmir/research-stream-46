@@ -1,0 +1,23 @@
+name: Tool Arsenal Test
+on: workflow_dispatch
+jobs:
+  test-tools:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Comprehensive Security Arsenal
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \\
+            nmap masscan zmap rustscan \\
+            sqlmap nikto dirb gobuster \\
+            hydra john medusa hashcat \\
+            metasploit-framework \\
+            python3 golang-go gcc ruby \\
+            wireshark-cli tcpdump netcat-openbsd \\
+            curl wget git jq
+      - name: Test Tools
+        run: |
+          echo "Network: $(nmap --version | head -1)"
+          echo "Web: $(sqlmap --version | head -1)"
+          echo "Pass: $(john --version | head -1)"
+          curl -s ifconfig.me
