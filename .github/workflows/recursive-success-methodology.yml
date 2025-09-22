@@ -1,0 +1,184 @@
+name: Recursive Success Methodology - Test Until Working
+on:
+  workflow_dispatch:
+    inputs:
+      test_task:
+        description: 'Task to test recursively until success'
+        required: true
+        default: 'network-discovery'
+      max_attempts:
+        description: 'Maximum recursive attempts'
+        required: true
+        default: '10'
+
+jobs:
+  # Attempt 1: Standard approach
+  standard-approach:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    outputs:
+      success: ${{ steps.test.outputs.success }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+        continue-on-error: true
+
+      - name: Test Standard Approach
+        id: test
+        continue-on-error: true
+        run: |
+          if nix-shell -p curl --run 'curl -s ifconfig.me > standard-result.txt'; then
+            echo "✅ Standard approach: SUCCESS" >> test-log.txt
+            echo "success=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Standard approach: FAILED" >> test-log.txt
+            echo "success=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload Standard Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: standard-approach-results
+          path: |
+            test-log.txt
+            standard-result.txt
+
+  # Attempt 2: Ubuntu package approach (if standard fails)
+  ubuntu-package-approach:
+    needs: standard-approach
+    runs-on: ubuntu-latest
+    if: needs.standard-approach.outputs.success != 'true'
+    continue-on-error: true
+    outputs:
+      success: ${{ steps.test.outputs.success }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test Ubuntu Package Approach
+        id: test
+        continue-on-error: true
+        run: |
+          echo "=== Ubuntu Package Approach ===" > ubuntu-test-log.txt
+
+          # Use Ubuntu packages instead of nix
+          sudo apt-get update -qq
+          sudo apt-get install -y curl nmap netcat-openbsd
+
+          if curl -s ifconfig.me > ubuntu-result.txt; then
+            echo "✅ Ubuntu package approach: SUCCESS" >> ubuntu-test-log.txt
+            echo "success=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Ubuntu package approach: FAILED" >> ubuntu-test-log.txt
+            echo "success=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload Ubuntu Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ubuntu-approach-results
+          path: |
+            ubuntu-test-log.txt
+            ubuntu-result.txt
+
+  # Attempt 3: Direct tool download approach
+  direct-download-approach:
+    needs: [standard-approach, ubuntu-package-approach]
+    runs-on: ubuntu-latest
+    if: needs.standard-approach.outputs.success != 'true' && needs.ubuntu-package-approach.outputs.success != 'true'
+    continue-on-error: true
+    outputs:
+      success: ${{ steps.test.outputs.success }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test Direct Download Approach
+        id: test
+        continue-on-error: true
+        run: |
+          echo "=== Direct Download Approach ===" > direct-test-log.txt
+
+          # Download tools directly
+          wget -q https://github.com/nmap/nmap/releases/download/7.95/nmap-7.95-linux-x86_64-portable.zip -O nmap.zip || echo "Nmap download failed" >> direct-test-log.txt
+
+          # Test with basic tools
+          if curl -s ifconfig.me > direct-result.txt; then
+            echo "✅ Direct download approach: SUCCESS" >> direct-test-log.txt
+            echo "success=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Direct download approach: FAILED" >> direct-test-log.txt
+            echo "success=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload Direct Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: direct-approach-results
+          path: |
+            direct-test-log.txt
+            direct-result.txt
+            nmap.zip
+
+  # Recursive Analysis and Next Iteration
+  recursive-analyzer:
+    needs: [standard-approach, ubuntu-package-approach, direct-download-approach]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download All Attempt Results
+        uses: actions/download-artifact@v4
+        with:
+          path: all-attempts/
+
+      - name: Analyze Success and Failures
+        run: |
+          echo "=== Recursive Analysis Results ===" > recursive-analysis.txt
+          echo "Task: ${{ github.event.inputs.test_task }}" >> recursive-analysis.txt
+          echo "Date: $(date)" >> recursive-analysis.txt
+          echo "" >> recursive-analysis.txt
+
+          # Check which approaches succeeded
+          echo "## Approach Results ##" >> recursive-analysis.txt
+
+          if [ "${{ needs.standard-approach.outputs.success }}" = "true" ]; then
+            echo "✅ Standard (nix-shell): SUCCESS" >> recursive-analysis.txt
+            WORKING_METHOD="standard"
+          elif [ "${{ needs.ubuntu-package-approach.outputs.success }}" = "true" ]; then
+            echo "✅ Ubuntu packages: SUCCESS" >> recursive-analysis.txt
+            WORKING_METHOD="ubuntu"
+          elif [ "${{ needs.direct-download-approach.outputs.success }}" = "true" ]; then
+            echo "✅ Direct download: SUCCESS" >> recursive-analysis.txt
+            WORKING_METHOD="direct"
+          else
+            echo "❌ All approaches: FAILED" >> recursive-analysis.txt
+            WORKING_METHOD="none"
+          fi
+
+          echo "WORKING_METHOD=$WORKING_METHOD" >> recursive-analysis.txt
+
+          # Generate next iteration strategy
+          echo "" >> recursive-analysis.txt
+          echo "## Next Iteration Strategy ##" >> recursive-analysis.txt
+
+          if [ "$WORKING_METHOD" != "none" ]; then
+            echo "🎯 SUCCESS ACHIEVED: Deploy working method across all repositories" >> recursive-analysis.txt
+            echo "Next action: Scale successful approach to maximum parallel execution" >> recursive-analysis.txt
+          else
+            echo "🔄 CONTINUE RESEARCH: Try alternative approaches" >> recursive-analysis.txt
+            echo "Next action: Research additional tool installation methods" >> recursive-analysis.txt
+          fi
+
+          # Count total artifacts generated
+          TOTAL_ARTIFACTS=$(find all-attempts/ -name "*.txt" | wc -l)
+          echo "Total research artifacts: $TOTAL_ARTIFACTS" >> recursive-analysis.txt
+
+      - name: Upload Recursive Analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: recursive-analysis-complete
+          path: |
+            recursive-analysis.txt
