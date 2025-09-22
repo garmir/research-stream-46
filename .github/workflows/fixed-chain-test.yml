@@ -1,0 +1,57 @@
+name: Fixed Command Chain Test
+on:
+  workflow_dispatch:
+    inputs:
+      test_target:
+        description: "Test target"
+        required: true
+        default: "port-2222-SSH"
+
+jobs:
+  command-chain:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        step: [1, 2, 3, 4, 5]
+    steps:
+      - name: Install Security Arsenal
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y nmap sqlmap hydra python3 golang-go curl jq
+
+      - name: Execute Command Chain Step ${{ matrix.step }}
+        run: |
+          echo "=== Command Chain Step ${{ matrix.step }} ===" > chain-step-${{ matrix.step }}.txt
+          echo "Target: ${{ github.event.inputs.test_target }}" >> chain-step-${{ matrix.step }}.txt
+          
+          case "${{ matrix.step }}" in
+            "1")
+              echo "STEP 1: Network reconnaissance" >> chain-step-${{ matrix.step }}.txt
+              curl -s ifconfig.me >> chain-step-${{ matrix.step }}.txt
+              nmap --version | head -1 >> chain-step-${{ matrix.step }}.txt
+              ;;
+            "2")
+              echo "STEP 2: Service enumeration" >> chain-step-${{ matrix.step }}.txt
+              curl -s httpbin.org/ip | jq . >> chain-step-${{ matrix.step }}.txt
+              ;;
+            "3")
+              echo "STEP 3: Tool validation" >> chain-step-${{ matrix.step }}.txt
+              python3 --version >> chain-step-${{ matrix.step }}.txt
+              go version >> chain-step-${{ matrix.step }}.txt
+              ;;
+            "4")
+              echo "STEP 4: Security research" >> chain-step-${{ matrix.step }}.txt
+              curl -s "https://api.github.com/search/repositories?q=SSH+2024" | jq ".total_count" >> chain-step-${{ matrix.step }}.txt
+              ;;
+            "5")
+              echo "STEP 5: Chain completion" >> chain-step-${{ matrix.step }}.txt
+              echo "Chain completed: $(date)" >> chain-step-${{ matrix.step }}.txt
+              ;;
+          esac
+          echo "✅ Step ${{ matrix.step }} completed successfully" >> chain-step-${{ matrix.step }}.txt
+
+      - name: Upload Step Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: command-chain-step-${{ matrix.step }}-${{ github.event.inputs.test_target }}
+          path: chain-step-${{ matrix.step }}.txt
